@@ -22,7 +22,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Correr script de extracción
-        run: python commodities_etl.py
+        run: python src/commodities_etl.py
 
       - name: Commitear datos actualizados
         run: |
@@ -32,4 +32,3 @@ jobs:
           git diff --cached --quiet || git commit -m "data: actualización $(date +'%Y-%m-%d')"
           git push
 
-          
