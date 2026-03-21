@@ -42,14 +42,14 @@ commodities-dashboard/
 │
 ├── .github/
 │   └── workflows/
-│       └── actualizar_datos.yml   pipeline de automatización
+│       └── actualizar_datos.yml   <- pipeline de automatización
 │
 ├── data/
 │   ├── soja.csv
 │   ├── maiz.csv
 │   └── trigo.csv
 │
-├── commodities_etl.py              script principal
+├── commodities_etl.py              <- script principal
 ├── requirements.txt
 └── README.md
 ```
