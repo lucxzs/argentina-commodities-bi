@@ -1,14 +1,4 @@
-"""
-commodities_etl.py
-==================
-Extracción diaria de precios de Soja, Maíz y Trigo desde Yahoo Finance.
-Calcula KPIs y guarda un CSV por commodity.
 
-Pensado para correr con Windows Task Scheduler una vez por día.
-
-Dependencias:
-    pip install yfinance pandas
-"""
 
 import yfinance as yf
 import pandas as pd
@@ -28,7 +18,7 @@ COMMODITIES = {
 }
 
 # Días de historia que se descargan en cada ejecución
-HISTORY_DAYS = "1y"
+HISTORY_DAYS = "5d"  # 1 año (puede ser "5d", "1mo", "3mo", "6mo", "1y", "2y", etc.)
 
 # Funciones 
 
@@ -37,8 +27,8 @@ def descargar_precios(ticker: str, periodo: str) -> pd.DataFrame:
     data = yf.Ticker(ticker).history(period=periodo)
     if data.empty:
         raise ValueError(f"No se obtuvieron datos para {ticker}")
-    data = data[["Close"]].copy()
-    data.index = pd.to_datetime(data.index).tz_localize(None)
+    data = data[["Close"]].copy() # solo nos quedamos con el precio de cierre
+    data.index = pd.to_datetime(data.index).tz_localize(None) # quita timezone para evitar problemas al guardar/leer CSV
     data.index.name = "fecha"
     data.columns = ["precio_cierre"]
     return data
@@ -116,13 +106,39 @@ def main():
     for nombre, ticker in COMMODITIES.items():
         try:
             log(f"Descargando {nombre} ({ticker})...")
-            df = descargar_precios(ticker, HISTORY_DAYS)
 
-            log(f"Calculando KPIs para {nombre}...")
-            df = calcular_kpis(df)
+            df_nuevo = descargar_precios(ticker, HISTORY_DAYS)
+            log(f"{nombre}: última fecha descargada = {df_nuevo.index.max()}")
 
-            ruta = guardar_csv(df, nombre, OUTPUT_DIR)
-            log(f"Guardado en: {ruta} ({len(df)} filas)")
+            ruta = os.path.join(OUTPUT_DIR, f"{nombre}.csv")
+
+            if os.path.exists(ruta):
+                existente = pd.read_csv(ruta, index_col="fecha", parse_dates=True)
+
+                ultima_existente = existente.index.max()
+                ultima_nueva = df_nuevo.index.max()
+
+                # 🧠 OPCIÓN 1 → validación
+                if ultima_nueva <= ultima_existente:
+                    log(f"{nombre}: No hay datos nuevos (última: {ultima_existente})")
+                    continue
+
+                # descarga una ventana corta de datos recientes y mantiene un histórico persistido localmente.
+
+                combinado = pd.concat([existente, df_nuevo]) 
+                combinado = combinado[~combinado.index.duplicated(keep="last")]
+                combinado.sort_index(inplace=True)
+
+            else:
+                log(f"{nombre}: creando dataset inicial")
+                combinado = df_nuevo
+
+            # recalculamos KPIs sobre todo el histórico
+            combinado = calcular_kpis(combinado)
+
+            combinado.to_csv(ruta)
+
+            log(f"{nombre}: actualizado correctamente → {len(combinado)} filas")
 
         except Exception as e:
             log(f"ERROR en {nombre}: {e}")
